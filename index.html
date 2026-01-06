@@ -32,7 +32,7 @@
         .container {
             background: var(--surface);
             width: 95%;
-            max-width: 1200px;
+            max-width: 1400px; /* Wider for the compare modal */
             margin: 40px 0;
             padding: 2rem;
             border-radius: 16px;
@@ -71,6 +71,12 @@
         .btn-toggle { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
         .btn-toggle:hover { background: var(--accent); color: var(--bg); }
         .btn-export { background: var(--success); }
+        .btn-copy { 
+            background: var(--surface); border: 1px solid var(--text-dim); 
+            color: var(--neon); font-size: 0.7rem; padding: 5px 10px;
+            border-radius: 4px; cursor: pointer; white-space: nowrap;
+        }
+        .btn-copy:hover { border-color: var(--neon); background: rgba(0, 243, 255, 0.1); }
 
         /* VIEW: WRITER (List) */
         #writer-view { display: flex; flex-direction: column; gap: 10px; }
@@ -181,8 +187,8 @@
         .story-content {
             background: var(--surface);
             padding: 30px;
-            width: 90%;
-            max-width: 1200px;
+            width: 95%;
+            max-width: 1400px;
             height: 90%;
             border-radius: 12px;
             border: 1px solid var(--text-dim);
@@ -200,17 +206,16 @@
 
         .compare-row {
             display: grid;
-            grid-template-columns: 80px 1fr 1fr; /* Chunk, User, Generated */
-            gap: 20px;
-            padding: 15px 0;
+            grid-template-columns: 60px 1fr 60px 1fr; /* Chunk | UserInput | Btn | GenText */
+            gap: 15px;
+            padding: 10px 0;
             border-bottom: 1px solid rgba(255,255,255,0.05);
-            align-items: start;
+            align-items: center;
         }
         .compare-row:last-child { border-bottom: none; }
         
         .c-chunk { font-family: monospace; color: var(--accent); font-weight: bold; font-size: 1.1rem; }
-        .c-user { color: var(--text-main); }
-        .c-gen { color: var(--neon); font-style: italic; opacity: 0.9; }
+        .c-gen { color: var(--neon); font-style: italic; opacity: 0.9; font-size: 0.95rem; }
         .c-header { font-weight: bold; text-transform: uppercase; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 10px; }
 
         .hidden { display: none !important; }
@@ -234,7 +239,7 @@
         <div style="display:flex; gap:10px;">
             <button class="btn btn-export" onclick="exportJson()">Export JSON</button>
             <button class="btn" style="background:var(--text-dim)" onclick="clearData()">Clear</button>
-            <button class="btn btn-toggle" id="btn-story" onclick="showStory()">Read / Compare</button>
+            <button class="btn btn-toggle" id="btn-story" onclick="showStory()">Story Checker</button>
             <button class="btn btn-toggle" id="btn-mode" onclick="toggleMode()">View: Wall</button>
         </div>
     </div>
@@ -250,12 +255,13 @@
     <div class="story-content">
         <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
             <h2 style="margin:0; color:var(--accent);">STORY CHECKER</h2>
-            <button class="btn" onclick="closeStory()">CLOSE</button>
+            <button class="btn" onclick="closeStory()">CLOSE & SAVE</button>
         </div>
         
         <div class="compare-row" style="padding-bottom:10px; border-bottom: 2px solid var(--text-dim);">
             <div class="c-header">Digits</div>
-            <div class="c-header">Your Story</div>
+            <div class="c-header">Your Story (Editable)</div>
+            <div class="c-header">Action</div>
             <div class="c-header" style="color:var(--neon)">Generated PAO Story</div>
         </div>
 
@@ -265,20 +271,19 @@
 </div>
 
 <script>
-    // --- 1. PAO DATA (The 100 items) ---
-    // Used to generate the "Correct" story in the background
+    // --- 1. PAO DATA ---
     const PAO_LIST = [
         { n:"00", p:"Ozzy Osbourne", a:"screams", o:"heavy metal" },
         { n:"01", p:"Neo (The One)", a:"matrixes", o:"the bullet" },
         { n:"02", p:"Orlando Bloom", a:"boards", o:"the pirate ship" },
-        { n:"03", p:"Anditsrue", a:"streams", o:"1010 digits of pi" }, // Contextual fix
+        { n:"03", p:"Andits", a:"rues", o:"1010 digits of pi" },
         { n:"04", p:"Odin", a:"births", o:"Thor" },
         { n:"05", p:"Oedipus", a:"sucks", o:"mom's teet" },
         { n:"06", p:"Octavia Spencer", a:"calculates", o:"the launch angle" },
         { n:"07", p:"Olivier Giroud", a:"scores", o:"the penalty kick" },
         { n:"08", p:"Ohio State", a:"loses to", o:"Michigan" },
         { n:"09", p:"Oscar Nunez", a:"annoys", o:"Michael Scott" },
-        { n:"10", p:"AOC", a:"betrays", o:"Among Us" },
+        { n:"10", p:"AOC", a:"plays", o:"Among Us" },
         { n:"11", p:"Ashley Alexander", a:"whisks", o:"nami matcha" },
         { n:"12", p:"Alexander Bell", a:"invents", o:"the telephone" },
         { n:"13", p:"Al Capone", a:"bootlegs", o:"alcohol" },
@@ -388,11 +393,9 @@
                 q *= k; t *= l; l += 2n; k += 1n; n_ = nn; r = nr;
             }
         }
-        // Offset 10 (1415926535)
         return digits.substring(11, 11 + count);
     }
 
-    // REDUCED TO 167 CHUNKS (1002 Digits)
     const NUM_CHUNKS = 167; 
     const CHUNK_SIZE = 6;
     const TARGET_DIGITS = NUM_CHUNKS * CHUNK_SIZE;
@@ -409,7 +412,6 @@
 
     // --- INIT ---
     function init() {
-        // Using "v3" to avoid conflicts with 170-chunk version
         const saved = localStorage.getItem('pi-writer-v3');
         if (saved) {
             USER_DATA = JSON.parse(saved);
@@ -506,10 +508,9 @@
         });
     }
 
-    // --- GENERATED STORY LOGIC ---
+    // --- STORY CHECKER LOGIC ---
     
     function generateStoryFromChunk(chunk) {
-        // chunk is 6 digits string "000102"
         const pIdx = parseInt(chunk.substring(0, 2));
         const aIdx = parseInt(chunk.substring(2, 4));
         const oIdx = parseInt(chunk.substring(4, 6));
@@ -526,21 +527,30 @@
         area.innerHTML = '';
         
         CHUNKS.forEach((chunk, idx) => {
-            const userText = USER_DATA[idx] || "---";
+            const userText = USER_DATA[idx] || "";
             const genText = generateStoryFromChunk(chunk);
             
             const row = document.createElement('div');
             row.className = 'compare-row';
             
-            // Add separator style for every 10 groups
             if(idx > 0 && idx % 10 === 0) {
                 row.style.borderTop = "2px solid var(--accent)";
                 row.style.marginTop = "10px";
             }
 
+            // Columns: Chunk | Input | Button | GenText
             row.innerHTML = `
                 <div class="c-chunk">${chunk}</div>
-                <div class="c-user">${userText}</div>
+                
+                <input type="text" class="story-input" 
+                    value="${userText.replace(/"/g, '&quot;')}" 
+                    oninput="updateStoryFromModal(${idx}, this.value)">
+                
+                <div style="text-align:center;">
+                    <button class="btn-copy" onclick="copyGenToUser(${idx})">← USE</button>
+                    <div style="display:none;" id="gen-data-${idx}">${genText}</div>
+                </div>
+
                 <div class="c-gen">${genText}</div>
             `;
             area.appendChild(row);
@@ -549,8 +559,85 @@
         document.getElementById('story-modal').style.display = 'flex';
     }
 
+    function updateStoryFromModal(idx, val) {
+        USER_DATA[idx] = val;
+        saveData();
+        // NOTE: We do not re-render the Writer/Wall view until modal closes
+        // to prevent scroll jumping or lag.
+    }
+
+    function copyGenToUser(idx) {
+        const genText = document.getElementById(`gen-data-${idx}`).textContent;
+        // Update Data
+        USER_DATA[idx] = genText;
+        saveData();
+        
+        // Update the input field in the modal immediately
+        // Finding the input in the same row is tricky without ID, but we know the structure.
+        // Actually, let's just refresh the modal row or query inputs.
+        // Easier: Give input an ID or just re-render modal? Re-rendering modal is heavy.
+        // Let's use simple DOM traversal or querySelector.
+        // Since we are inside an onclick, we can pass 'this'. 
+        // But for simplicity in this generated code, let's just re-render the modal content? No, scrolling.
+        // We will just update the input that corresponds to this index.
+        
+        // Better way: Re-generate the row?
+        // Let's grab all inputs in the modal and pick the [idx] one? 
+        // No, modal inputs are not same index as global.
+        
+        // Let's just update the specific input by finding it relative to the button?
+        // Or assign IDs to inputs in showStory: id="modal-input-${idx}"
+        const input = document.getElementById(`modal-input-${idx}`);
+        if(input) input.value = genText;
+    }
+    
+    // REDEFINED showStory to add IDs for the copy function
+    function showStory() {
+        const area = document.getElementById('compare-area');
+        area.innerHTML = '';
+        
+        CHUNKS.forEach((chunk, idx) => {
+            const userText = USER_DATA[idx] || "";
+            const genText = generateStoryFromChunk(chunk);
+            
+            const row = document.createElement('div');
+            row.className = 'compare-row';
+            
+            if(idx > 0 && idx % 10 === 0) {
+                row.style.borderTop = "2px solid var(--accent)";
+                row.style.marginTop = "10px";
+            }
+
+            row.innerHTML = `
+                <div class="c-chunk">${chunk}</div>
+                
+                <input type="text" class="story-input" id="modal-input-${idx}"
+                    value="${userText.replace(/"/g, '&quot;')}" 
+                    oninput="updateStoryFromModal(${idx}, this.value)">
+                
+                <div style="text-align:center;">
+                    <button class="btn-copy" onclick="copyGenToUser(${idx}, '${genText.replace(/'/g, "\\'")}')">← USE</button>
+                </div>
+
+                <div class="c-gen">${genText}</div>
+            `;
+            area.appendChild(row);
+        });
+        
+        document.getElementById('story-modal').style.display = 'flex';
+    }
+
+    function copyGenToUser(idx, text) {
+        USER_DATA[idx] = text;
+        saveData();
+        document.getElementById(`modal-input-${idx}`).value = text;
+    }
+
     function closeStory() {
         document.getElementById('story-modal').style.display = 'none';
+        // Refresh the main views to reflect changes made in modal
+        renderWriter();
+        renderWall();
     }
 
     // --- HANDLERS ---
