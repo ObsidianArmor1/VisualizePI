@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Writer (1010 Digits)</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --surface: #2a2e35;
+            --primary: #4682b4;
+            --accent: #ffd700;
+            --text-main: #e0e0e0;
+            --text-dim: #6c757d;
+            --success: #2e7d32;
+            --border: rgba(255,255,255,0.1);
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-y: scroll; /* Always show scrollbar to prevent shift */
+        }
+
+        .container {
+            background: var(--surface);
+            width: 95%;
+            max-width: 1000px;
+            margin: 40px 0;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            border: 1px solid var(--text-dim);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--surface);
+            z-index: 10;
+            padding-top: 10px;
+        }
+
+        h1 { margin: 0; font-size: 1.8rem; color: var(--accent); }
+        .stats { color: var(--text-dim); font-size: 0.9rem; font-weight: bold; text-transform: uppercase; }
+
+        .btn {
+            background: var(--primary); color: white; border: none;
+            padding: 10px 20px; border-radius: 8px; font-weight: 900;
+            cursor: pointer; transition: 0.2s; text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn:hover { filter: brightness(1.2); }
+        .btn-toggle { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+        .btn-toggle:hover { background: var(--accent); color: var(--bg); }
+
+        /* VIEW: WRITER (List) */
+        #writer-view { display: flex; flex-direction: column; gap: 10px; }
+
+        .row-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s;
+        }
+        .row-item:focus-within { border-color: var(--primary); }
+
+        .idx-badge {
+            font-family: monospace;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            width: 30px;
+            text-align: right;
+        }
+
+        .digit-chunk {
+            font-family: monospace;
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: white;
+            width: 100px; /* Fixed width for alignment */
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .story-input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--text-dim);
+            color: var(--text-main);
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 1.1rem;
+        }
+        .story-input:focus { outline: none; border-color: var(--accent); }
+
+        /* VIEW: WALL (Matrix) */
+        #wall-view {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            align-content: flex-start;
+            padding-bottom: 50px;
+        }
+
+        .wall-chunk {
+            font-family: monospace;
+            font-size: 1.2rem;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            cursor: default;
+            color: var(--text-dim);
+            border: 1px solid transparent;
+            transition: all 0.1s;
+        }
+        
+        .wall-chunk.filled { color: var(--primary); background: rgba(70, 130, 180, 0.1); }
+        
+        .wall-chunk:hover {
+            color: var(--bg);
+            background: var(--accent);
+            transform: scale(1.1);
+            font-weight: bold;
+            box-shadow: 0 0 15px var(--accent);
+            z-index: 2;
+        }
+
+        /* TOOLTIP */
+        #tooltip {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface);
+            border: 2px solid var(--accent);
+            padding: 15px 30px;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            z-index: 100;
+            pointer-events: none;
+            display: none;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .hidden { display: none !important; }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div>
+            <h1>PI WRITER</h1>
+            <span class="stats">Progress: <span id="progress-count">0</span> / <span id="total-count">0</span></span>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn" style="background:var(--text-dim)" onclick="clearData()">Clear All</button>
+            <button class="btn btn-toggle" id="btn-mode" onclick="toggleMode()">View: Wall</button>
+        </div>
+    </div>
+
+    <div id="writer-view">
+        </div>
+
+    <div id="wall-view" class="hidden">
+        </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+    // 1. GENERATE PI (Spigot Algorithm)
+    // We need 1010 digits. The algorithm includes "3.", so we generate ~1015 and slice.
+    function generatePiDigits(count) {
+        let digits = "";
+        let q = 1n, r = 0n, t = 1n, k = 1n, n_ = 3n, l = 3n;
+        // Generate a bit more to be safe
+        while (digits.length < count + 5) {
+            if (4n * q + r - t < n_ * t) {
+                digits += n_.toString();
+                let nr = 10n * (r - n_ * t);
+                n_ = ((10n * (3n * q + r)) / t) - 10n * n_;
+                q *= 10n; r = nr;
+            } else {
+                let nr = (2n * q + r) * l;
+                let nn = (q * (7n * k + 2n) + r * l) / (t * l);
+                q *= k; t *= l; l += 2n; k += 1n; n_ = nn; r = nr;
+            }
+        }
+        // Remove the leading "3" (first digit) to get only decimal places
+        return digits.substring(1, count + 1);
+    }
+
+    const TARGET_DIGITS = 1010;
+    const CHUNK_SIZE = 6;
+    const RAW_PI = generatePiDigits(TARGET_DIGITS);
+    
+    // Split into chunks of 6
+    let CHUNKS = [];
+    for (let i = 0; i < RAW_PI.length; i += CHUNK_SIZE) {
+        CHUNKS.push(RAW_PI.substring(i, i + CHUNK_SIZE));
+    }
+
+    // Storage for user stories
+    // Format: { "0": "Story for first chunk", "1": "Story for second..." }
+    let USER_DATA = {};
+
+    // --- INIT ---
+    function init() {
+        const saved = localStorage.getItem('pi-writer-stories');
+        if (saved) {
+            USER_DATA = JSON.parse(saved);
+        }
+
+        document.getElementById('total-count').textContent = CHUNKS.length;
+        updateProgress();
+        renderWriter();
+        renderWall();
+    }
+
+    function updateProgress() {
+        const count = Object.values(USER_DATA).filter(s => s && s.trim().length > 0).length;
+        document.getElementById('progress-count').textContent = count;
+    }
+
+    function saveData() {
+        localStorage.setItem('pi-writer-stories', JSON.stringify(USER_DATA));
+        updateProgress();
+    }
+
+    function clearData() {
+        if(confirm("Are you sure you want to delete all your stories? This cannot be undone.")) {
+            USER_DATA = {};
+            saveData();
+            // Re-render
+            const inputs = document.querySelectorAll('.story-input');
+            inputs.forEach(inp => inp.value = '');
+            renderWall(); // Refresh wall classes
+        }
+    }
+
+    // --- RENDERERS ---
+
+    function renderWriter() {
+        const container = document.getElementById('writer-view');
+        container.innerHTML = '';
+
+        CHUNKS.forEach((chunk, index) => {
+            const div = document.createElement('div');
+            div.className = 'row-item';
+            
+            // Logic to determine inputs
+            const savedText = USER_DATA[index] || "";
+
+            div.innerHTML = `
+                <div class="idx-badge">${index + 1}</div>
+                <div class="digit-chunk">${chunk}</div>
+                <input type="text" class="story-input" 
+                    placeholder="Enter phrase..." 
+                    data-index="${index}" 
+                    value="${savedText.replace(/"/g, '&quot;')}"
+                    oninput="handleInput(this)">
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function renderWall() {
+        const container = document.getElementById('wall-view');
+        container.innerHTML = '';
+
+        CHUNKS.forEach((chunk, index) => {
+            const span = document.createElement('span');
+            span.className = 'wall-chunk';
+            span.textContent = chunk;
+            
+            const savedText = USER_DATA[index] || "";
+            if (savedText.trim().length > 0) {
+                span.classList.add('filled');
+            }
+
+            // Hover Events
+            span.addEventListener('mouseenter', (e) => {
+                const text = USER_DATA[index] || "No phrase yet...";
+                showTooltip(text);
+            });
+            span.addEventListener('mouseleave', hideTooltip);
+
+            // Click to jump to edit mode? Optional, but helpful.
+            span.addEventListener('click', () => {
+                toggleMode(); // Go to list
+                // Scroll to item
+                setTimeout(() => {
+                    const inputs = document.querySelectorAll('.story-input');
+                    if(inputs[index]) {
+                        inputs[index].scrollIntoView({behavior: "smooth", block: "center"});
+                        inputs[index].focus();
+                    }
+                }, 100);
+            });
+
+            container.appendChild(span);
+        });
+    }
+
+    // --- HANDLERS ---
+
+    function handleInput(el) {
+        const idx = el.dataset.index;
+        const val = el.value;
+        USER_DATA[idx] = val;
+        saveData();
+    }
+
+    let isWallMode = false;
+    function toggleMode() {
+        isWallMode = !isWallMode;
+        const btn = document.getElementById('btn-mode');
+        const writer = document.getElementById('writer-view');
+        const wall = document.getElementById('wall-view');
+
+        if (isWallMode) {
+            // Switch to Wall
+            // Re-render wall to capture latest inputs
+            renderWall();
+            writer.classList.add('hidden');
+            wall.classList.remove('hidden');
+            btn.textContent = "View: Edit List";
+            btn.style.background = "var(--accent)";
+            btn.style.color = "var(--bg)";
+        } else {
+            // Switch to Writer
+            wall.classList.add('hidden');
+            writer.classList.remove('hidden');
+            btn.textContent = "View: Wall";
+            btn.style.background = "transparent";
+            btn.style.color = "var(--accent)";
+        }
+    }
+
+    // --- TOOLTIP LOGIC ---
+    const tooltip = document.getElementById('tooltip');
+
+    function showTooltip(text) {
+        tooltip.textContent = text;
+        tooltip.style.display = 'block';
+    }
+
+    function hideTooltip() {
+        tooltip.style.display = 'none';
+    }
+
+    // Boot
+    init();
+
+</script>
+</body>
+</html>
