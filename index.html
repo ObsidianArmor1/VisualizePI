@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi Writer (Offset)</title>
+    <title>Pi Writer (1k Challenge)</title>
     <style>
         :root {
             --bg: #121212;
@@ -13,6 +13,8 @@
             --text-main: #e0e0e0;
             --text-dim: #6c757d;
             --success: #2e7d32;
+            --danger: #c62828;
+            --neon: #00f3ff;
             --border: rgba(255,255,255,0.1);
         }
 
@@ -30,7 +32,7 @@
         .container {
             background: var(--surface);
             width: 95%;
-            max-width: 1200px; /* Wider for the 10-column grid */
+            max-width: 1200px;
             margin: 40px 0;
             padding: 2rem;
             border-radius: 16px;
@@ -117,7 +119,7 @@
         /* VIEW: WALL (10-Column Grid) */
         #wall-view {
             display: grid;
-            grid-template-columns: repeat(10, 1fr); /* FORCED 10 COLUMNS */
+            grid-template-columns: repeat(10, 1fr); 
             gap: 8px;
             padding-bottom: 50px;
         }
@@ -169,7 +171,7 @@
             text-align: center;
         }
 
-        /* STORY MODAL */
+        /* STORY COMPARISON MODAL */
         #story-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 200;
@@ -178,31 +180,38 @@
         
         .story-content {
             background: var(--surface);
-            padding: 40px;
-            width: 80%;
-            max-width: 900px;
-            height: 80%;
+            padding: 30px;
+            width: 90%;
+            max-width: 1200px;
+            height: 90%;
             border-radius: 12px;
             border: 1px solid var(--text-dim);
             display: flex;
             flex-direction: column;
         }
 
-        .story-text-area {
+        .story-scroll-area {
             flex: 1;
             overflow-y: auto;
             background: var(--bg);
-            padding: 20px;
             border-radius: 8px;
-            font-size: 1.1rem;
-            line-height: 1.8;
-            color: var(--text-main);
-            white-space: pre-wrap;
-            font-family: 'Segoe UI', serif;
+            padding: 20px;
         }
 
-        .story-chunk { color: var(--accent); font-weight: bold; }
-        .story-sep { color: var(--text-dim); margin: 0 8px; }
+        .compare-row {
+            display: grid;
+            grid-template-columns: 80px 1fr 1fr; /* Chunk, User, Generated */
+            gap: 20px;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            align-items: start;
+        }
+        .compare-row:last-child { border-bottom: none; }
+        
+        .c-chunk { font-family: monospace; color: var(--accent); font-weight: bold; font-size: 1.1rem; }
+        .c-user { color: var(--text-main); }
+        .c-gen { color: var(--neon); font-style: italic; opacity: 0.9; }
+        .c-header { font-weight: bold; text-transform: uppercase; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 10px; }
 
         .hidden { display: none !important; }
 
@@ -220,46 +229,151 @@
     <div class="header">
         <div>
             <h1>PI WRITER</h1>
-            <span class="stats">Offset: 897932... | Progress: <span id="progress-count">0</span> / <span id="total-count">0</span></span>
+            <span class="stats">Offset: 897932... | Count: <span id="progress-count">0</span> / 167</span>
         </div>
         <div style="display:flex; gap:10px;">
             <button class="btn btn-export" onclick="exportJson()">Export JSON</button>
             <button class="btn" style="background:var(--text-dim)" onclick="clearData()">Clear</button>
-            <button class="btn btn-toggle" id="btn-story" onclick="showStory()">Read Story</button>
+            <button class="btn btn-toggle" id="btn-story" onclick="showStory()">Read / Compare</button>
             <button class="btn btn-toggle" id="btn-mode" onclick="toggleMode()">View: Wall</button>
         </div>
     </div>
 
-    <div id="writer-view">
-        </div>
+    <div id="writer-view"></div>
 
-    <div id="wall-view" class="hidden">
-        </div>
+    <div id="wall-view" class="hidden"></div>
 </div>
 
 <div id="tooltip"></div>
 
 <div id="story-modal">
     <div class="story-content">
-        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-            <h2 style="margin:0; color:var(--accent);">FULL STORY</h2>
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <h2 style="margin:0; color:var(--accent);">STORY CHECKER</h2>
             <button class="btn" onclick="closeStory()">CLOSE</button>
         </div>
-        <div class="story-text-area" id="story-display-box"></div>
+        
+        <div class="compare-row" style="padding-bottom:10px; border-bottom: 2px solid var(--text-dim);">
+            <div class="c-header">Digits</div>
+            <div class="c-header">Your Story</div>
+            <div class="c-header" style="color:var(--neon)">Generated PAO Story</div>
+        </div>
+
+        <div class="story-scroll-area" id="compare-area">
+            </div>
     </div>
 </div>
 
 <script>
-    // 1. GENERATE PI (Spigot Algorithm)
-    // We need 1010 digits past the start.
-    // Requirement: Skip "3." AND "1415926535" (10 digits).
+    // --- 1. PAO DATA (The 100 items) ---
+    // Used to generate the "Correct" story in the background
+    const PAO_LIST = [
+        { n:"00", p:"Ozzy Osbourne", a:"screams", o:"heavy metal" },
+        { n:"01", p:"Neo (The One)", a:"matrixes", o:"the bullet" },
+        { n:"02", p:"Orlando Bloom", a:"boards", o:"the pirate ship" },
+        { n:"03", p:"Anditsrue", a:"streams", o:"1010 digits of pi" }, // Contextual fix
+        { n:"04", p:"Odin", a:"births", o:"Thor" },
+        { n:"05", p:"Oedipus", a:"sucks", o:"mom's teet" },
+        { n:"06", p:"Octavia Spencer", a:"calculates", o:"the launch angle" },
+        { n:"07", p:"Olivier Giroud", a:"scores", o:"the penalty kick" },
+        { n:"08", p:"Ohio State", a:"loses to", o:"Michigan" },
+        { n:"09", p:"Oscar Nunez", a:"annoys", o:"Michael Scott" },
+        { n:"10", p:"AOC", a:"betrays", o:"Among Us" },
+        { n:"11", p:"Ashley Alexander", a:"whisks", o:"nami matcha" },
+        { n:"12", p:"Alexander Bell", a:"invents", o:"the telephone" },
+        { n:"13", p:"Al Capone", a:"bootlegs", o:"alcohol" },
+        { n:"14", p:"Anthony Davis", a:"dunks", o:"the basketball" },
+        { n:"15", p:"Albert Einstein", a:"solves", o:"the equation" },
+        { n:"16", p:"Arnold Schwarzenegger", a:"lifts", o:"weights" },
+        { n:"17", p:"Ariana Grande", a:"makes out with", o:"Ethan Slater" },
+        { n:"18", p:"Alexander Hamilton", a:"performs", o:"my shot" },
+        { n:"19", p:"Alfred Nobel", a:"awarded", o:"peace prize" },
+        { n:"20", p:"Barack Obama", a:"legislates", o:"Obamacare" },
+        { n:"21", p:"Buzz Aldrin", a:"lands", o:"the moon" },
+        { n:"22", p:"BB8", a:"rolls", o:"in the desert" },
+        { n:"23", p:"Bryan Cranston", a:"cooks", o:"crystal meth" },
+        { n:"24", p:"Brooklyn Decker", a:"models", o:"sports illustrated swimsuit" },
+        { n:"25", p:"Billie Eilish", a:"mumbles", o:"bad guy" },
+        { n:"26", p:"Barney Stinson", a:"picks up", o:"women" },
+        { n:"27", p:"Britney Griner", a:"gets arrested", o:"in Russia" },
+        { n:"28", p:"Brett Hull", a:"skates", o:"on ice rink" },
+        { n:"29", p:"Benjamin Netanyahu", a:"commits", o:"genocide in Gaza" },
+        { n:"30", p:"Conan O'Brien", a:"hosts", o:"late night show" },
+        { n:"31", p:"Clay Aiken", a:"wins", o:"American Idol" },
+        { n:"32", p:"Chris Brown", a:"abuses", o:"Rihanna" },
+        { n:"33", p:"CC Sabathia", a:"throws", o:"a strike" },
+        { n:"34", p:"Claude Debussy", a:"composes", o:"Deux Arabesque" },
+        { n:"35", p:"CEO", a:"owns", o:"company" },
+        { n:"36", p:"Charlie Sheen", a:"pedophiles", o:"children" },
+        { n:"37", p:"Chris Gardner", a:"interviews", o:"at bank" },
+        { n:"38", p:"Chris Hemsworth", a:"wields", o:"Mjolnir" },
+        { n:"39", p:"Cam Newton", a:"throws", o:"touchdown" },
+        { n:"40", p:"Doctor", a:"treats", o:"patient" },
+        { n:"41", p:"District Attorney", a:"prosecutes", o:"criminal" },
+        { n:"42", p:"Defensive Back", a:"intercepts", o:"football" },
+        { n:"43", p:"Dick Cheney", a:"bombs", o:"Iraq" },
+        { n:"44", p:"Designated Driver", a:"drives", o:"drunk people home" },
+        { n:"45", p:"Dale Earnhardt", a:"races", o:"NASCAR" },
+        { n:"46", p:"Dr. Suess", a:"writes", o:"The Cat in the Hat" },
+        { n:"47", p:"David Goggins", a:"carries", o:"the boats" },
+        { n:"48", p:"DHL", a:"delivers", o:"package" },
+        { n:"49", p:"Daniel Negreanu", a:"bluffs", o:"his poker hand" },
+        { n:"50", p:"Elmo", a:"snorts", o:"cocaine" },
+        { n:"51", p:"EA Sports", a:"announces", o:"it's in the game" },
+        { n:"52", p:"Earthbender", a:"bends", o:"rock" },
+        { n:"53", p:"Emilia Clarke", a:"burns", o:"the Lannisters" },
+        { n:"54", p:"Ellen DeGeneres", a:"bullies", o:"employees" },
+        { n:"55", p:"Electrical Engineer", a:"fixes", o:"computers" },
+        { n:"56", p:"Edward Snowden", a:"leaks", o:"government secrets" },
+        { n:"57", p:"Egg", a:"hatches", o:"into chicken" },
+        { n:"58", p:"Evander Holyfield", a:"knocks out", o:"boxer" },
+        { n:"59", p:"Elyn Nordegren", a:"gets cheated on by", o:"Tiger Woods" },
+        { n:"60", p:"Significant Other", a:"proposes", o:"on one knee" },
+        { n:"61", p:"Stephen A. Smith", a:"yaps", o:"on Sportscenter" },
+        { n:"62", p:"Sergey Brin", a:"codes", o:"Google" },
+        { n:"63", p:"Santa Claus", a:"gifts", o:"Christmas gifts" },
+        { n:"64", p:"Snoop Dogg", a:"smokes", o:"weed" },
+        { n:"65", p:"Sean Evans", a:"eats", o:"hot wings" },
+        { n:"66", p:"Steven Spielberg", a:"directs", o:"ET" },
+        { n:"67", p:"SG Lewis", a:"produces", o:"electronic music" },
+        { n:"68", p:"Sherlock Holmes", a:"deduces", o:"mystery" },
+        { n:"69", p:"Sonic", a:"collects", o:"coins" },
+        { n:"70", p:"Goku", a:"powers up to", o:"Super Saiyan 3" },
+        { n:"71", p:"Gilbert Arenas", a:"shoots", o:"the gun" },
+        { n:"72", p:"George Bush", a:"says", o:"fool me once" },
+        { n:"73", p:"GothamChess", a:"checkmates", o:"Magnus Carlsen" },
+        { n:"74", p:"Grigor Dimitrov", a:"serves", o:"an ace" },
+        { n:"75", p:"Genie", a:"grants", o:"wish" },
+        { n:"76", p:"Gwen Stefani", a:"hollers back", o:"at girls" },
+        { n:"77", p:"Galileo Galilei", a:"discovers", o:"the stars" },
+        { n:"78", p:"Grace Hopper", a:"provides", o:"scholarships" },
+        { n:"79", p:"Gavin Newsom", a:"governs", o:"California" },
+        { n:"80", p:"Ho-Oh", a:"spams", o:"Sacred Fire" },
+        { n:"81", p:"Hans Anderson", a:"tells", o:"fairytales" },
+        { n:"82", p:"Hellboy", a:"grinds", o:"horns" },
+        { n:"83", p:"House Cat", a:"catches", o:"mice" },
+        { n:"84", p:"House Dog", a:"chews", o:"bone" },
+        { n:"85", p:"He-Man", a:"kills", o:"Skeletor" },
+        { n:"86", p:"Harry Styles", a:"sings", o:"Watermelon Sugar" },
+        { n:"87", p:"FlygonHG", a:"plays", o:"Nuzlocke" },
+        { n:"88", p:"Hulk Hogan", a:"wrestles", o:"on WWE" },
+        { n:"89", p:"Hikaru Nakamura", a:"looks up at", o:"ceiling" },
+        { n:"90", p:"Nick Offerman", a:"manages", o:"April" },
+        { n:"91", p:"Neil Armstrong", a:"leaps", o:"for mankind" },
+        { n:"92", p:"Shohei Ohtani", a:"wears", o:"New Balance" },
+        { n:"93", p:"Nicholas Cage", a:"steals", o:"Declaration of Independence" },
+        { n:"94", p:"Nick Digiovanni", a:"films", o:"YouTube Shorts" },
+        { n:"95", p:"Nemo", a:"swims", o:"forever" },
+        { n:"96", p:"Nimbus", a:"flies", o:"to the Golden Snitch" },
+        { n:"97", p:"Nice Guy", a:"finishes", o:"last" },
+        { n:"98", p:"Naruto Hokage", a:"leads", o:"hidden leaf village" },
+        { n:"99", p:"Ninja", a:"falls off", o:"on Twitch" }
+    ];
+
+    // --- 2. GENERATE PI ---
     function generatePiDigits(count) {
         let digits = "";
         let q = 1n, r = 0n, t = 1n, k = 1n, n_ = 3n, l = 3n;
-        
-        // Generate enough to cover the offset (10) + count needed
-        // Offset = 10 digits (1415926535)
-        // Total needed ~ 1030 to be safe
         const totalNeeded = count + 15; 
         
         while (digits.length < totalNeeded) {
@@ -274,18 +388,16 @@
                 q *= k; t *= l; l += 2n; k += 1n; n_ = nn; r = nr;
             }
         }
-        
-        // digits[0] is '3'. 
-        // digits[1..10] are '1415926535'.
-        // We want to start at index 11.
+        // Offset 10 (1415926535)
         return digits.substring(11, 11 + count);
     }
 
-    const TARGET_DIGITS = 1020; // Enough for 170 chunks (17 groups * 10)
+    // REDUCED TO 167 CHUNKS (1002 Digits)
+    const NUM_CHUNKS = 167; 
     const CHUNK_SIZE = 6;
+    const TARGET_DIGITS = NUM_CHUNKS * CHUNK_SIZE;
     const RAW_PI = generatePiDigits(TARGET_DIGITS);
     
-    // Split into chunks of 6
     let CHUNKS = [];
     for (let i = 0; i < RAW_PI.length; i += CHUNK_SIZE) {
         if(i + CHUNK_SIZE <= RAW_PI.length) {
@@ -293,19 +405,17 @@
         }
     }
 
-    // Storage for user stories
-    // Key: pi-writer-v2 to avoid conflict with non-offset version
     let USER_DATA = {};
 
     // --- INIT ---
     function init() {
-        const saved = localStorage.getItem('pi-writer-v2');
+        // Using "v3" to avoid conflicts with 170-chunk version
+        const saved = localStorage.getItem('pi-writer-v3');
         if (saved) {
             USER_DATA = JSON.parse(saved);
         }
 
-        document.getElementById('total-count').textContent = CHUNKS.length;
-        updateProgress();
+        document.getElementById('progress-count').textContent = Object.values(USER_DATA).filter(s => s && s.trim().length > 0).length;
         renderWriter();
         renderWall();
     }
@@ -316,7 +426,7 @@
     }
 
     function saveData() {
-        localStorage.setItem('pi-writer-v2', JSON.stringify(USER_DATA));
+        localStorage.setItem('pi-writer-v3', JSON.stringify(USER_DATA));
         updateProgress();
     }
 
@@ -349,7 +459,6 @@
         CHUNKS.forEach((chunk, index) => {
             const div = document.createElement('div');
             div.className = 'row-item';
-            
             const savedText = USER_DATA[index] || "";
 
             div.innerHTML = `
@@ -379,14 +488,9 @@
                 span.classList.add('filled');
             }
 
-            // Hover Events
-            span.addEventListener('mouseenter', (e) => {
-                const text = USER_DATA[index] || "No phrase yet...";
-                showTooltip(text);
-            });
+            span.addEventListener('mouseenter', () => showTooltip(USER_DATA[index] || "No phrase yet..."));
             span.addEventListener('mouseleave', hideTooltip);
 
-            // Click to jump to edit list
             span.addEventListener('click', () => {
                 toggleMode(); 
                 setTimeout(() => {
@@ -402,28 +506,46 @@
         });
     }
 
-    // --- STORY MODE ---
+    // --- GENERATED STORY LOGIC ---
+    
+    function generateStoryFromChunk(chunk) {
+        // chunk is 6 digits string "000102"
+        const pIdx = parseInt(chunk.substring(0, 2));
+        const aIdx = parseInt(chunk.substring(2, 4));
+        const oIdx = parseInt(chunk.substring(4, 6));
+
+        const p = PAO_LIST[pIdx].p;
+        const a = PAO_LIST[aIdx].a;
+        const o = PAO_LIST[oIdx].o;
+
+        return `${p} ${a} ${o}`;
+    }
+
     function showStory() {
-        const box = document.getElementById('story-display-box');
-        let html = "";
+        const area = document.getElementById('compare-area');
+        area.innerHTML = '';
         
         CHUNKS.forEach((chunk, idx) => {
-            const text = USER_DATA[idx] || "___";
+            const userText = USER_DATA[idx] || "---";
+            const genText = generateStoryFromChunk(chunk);
             
-            // Add text
-            html += `<span class="story-chunk">${text}</span>`;
+            const row = document.createElement('div');
+            row.className = 'compare-row';
             
-            // Separator logic
-            if ((idx + 1) % 10 === 0) {
-                // Paragraph break every 10 groups
-                html += "<br><br><hr style='opacity:0.2'><br>";
-            } else {
-                // Pipe separator
-                html += `<span class="story-sep">|</span>`;
+            // Add separator style for every 10 groups
+            if(idx > 0 && idx % 10 === 0) {
+                row.style.borderTop = "2px solid var(--accent)";
+                row.style.marginTop = "10px";
             }
+
+            row.innerHTML = `
+                <div class="c-chunk">${chunk}</div>
+                <div class="c-user">${userText}</div>
+                <div class="c-gen">${genText}</div>
+            `;
+            area.appendChild(row);
         });
         
-        box.innerHTML = html;
         document.getElementById('story-modal').style.display = 'flex';
     }
 
@@ -432,11 +554,8 @@
     }
 
     // --- HANDLERS ---
-
     function handleInput(el) {
-        const idx = el.dataset.index;
-        const val = el.value;
-        USER_DATA[idx] = val;
+        USER_DATA[el.dataset.index] = el.value;
         saveData();
     }
 
@@ -448,7 +567,7 @@
         const wall = document.getElementById('wall-view');
 
         if (isWallMode) {
-            renderWall(); // Refresh to catch new inputs
+            renderWall(); 
             writer.classList.add('hidden');
             wall.classList.remove('hidden');
             btn.textContent = "View: Edit List";
@@ -463,19 +582,13 @@
         }
     }
 
-    // --- TOOLTIP LOGIC ---
     const tooltip = document.getElementById('tooltip');
-
     function showTooltip(text) {
         tooltip.textContent = text;
         tooltip.style.display = 'block';
     }
+    function hideTooltip() { tooltip.style.display = 'none'; }
 
-    function hideTooltip() {
-        tooltip.style.display = 'none';
-    }
-
-    // Boot
     init();
 
 </script>
